@@ -66,6 +66,13 @@ class TreeInitialize(object):
             print("Runtime Error Info: {0}".format(err))
             return -1
 
+    def random_binary_tree(self):
+        root = TreeNode(0)
+        items = self.__random_sort()
+        self.root = self._build_binary_tree(root, items)
+        _ = self._define_node_index(self.root)
+        return self.root
+
     def _node_list(self, root):
         #将二叉树数据提出放入list
         def node_val(node):
@@ -90,15 +97,6 @@ class TreeInitialize(object):
                 arr_arr_node.append(tmp_val)
             node_queue = tmp
         return arr_arr_node
-            # node_queue = tmp
-
-    def random_binary_tree(self):
-        root = TreeNode(0)
-        items = self.__random_sort()
-        self.root = self._build_binary_tree(root, items)
-        _ = self._define_node_index(self.root)
-        return self.root
-
 
 class TreeLearning(TreeInitialize):
     """Build the k-means clustering binary tree"""
