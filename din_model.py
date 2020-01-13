@@ -3,6 +3,7 @@ import os
 from .sample_init import *
 # from Dice import dice
 import sklearn.metrics as metrics
+
 class Model(object):
 
     def __init__(self, album_count, node_count):
@@ -13,7 +14,7 @@ class Model(object):
         self.sl = tf.placeholder(tf.int32, [None, ])  # [B] 播放历史个数
         self.lr = tf.placeholder(tf.float64, [])      #decay
         self.is_leaf = tf.placeholder(tf.int32, [None, ]) #node节点0 叶子节点1
-        hidden_units = 64
+        hidden_units = 32
         self.saver = None
 
         self.item_emb_w = tf.get_variable("item_emb_w", [album_count, hidden_units])
@@ -44,7 +45,7 @@ class Model(object):
         hist_i = attention(i_emb, h_emb, self.sl)
 
         # -- attention end ---
-        hist_i = tf.layers.batch_normalization(inputs=hist_i)
+        # hist_i = tf.layers.batch_normalization(inputs=hist_i)
         hist_i = tf.reshape(hist_i, [-1, hidden_units], name='hist_bn')
         hist_i = tf.layers.dense(hist_i, hidden_units, name='hist_fcn')
 
@@ -52,9 +53,9 @@ class Model(object):
 
         # -- fcn begin -------
         din_i = tf.concat([u_emb_i, i_emb], axis=-1)
-        din_i = tf.layers.batch_normalization(inputs=din_i, name='b1')
-        d_layer_1_i = tf.layers.dense(din_i, 80, activation=tf.nn.sigmoid, name='f1')
-        d_layer_2_i = tf.layers.dense(d_layer_1_i, 40, activation=tf.nn.sigmoid, name='f2')
+        # din_i = tf.layers.batch_normalization(inputs=din_i, name='b1')
+        d_layer_1_i = tf.layers.dense(din_i, 64, activation=tf.nn.sigmoid, name='f1')
+        d_layer_2_i = tf.layers.dense(d_layer_1_i, 32, activation=tf.nn.sigmoid, name='f2')
         d_layer_3_i = tf.layers.dense(d_layer_2_i, 1, activation=None, name='f3')
         d_layer_3_i = tf.reshape(d_layer_3_i, [-1])
         self.logits = i_b + d_layer_3_i
@@ -81,31 +82,50 @@ class Model(object):
         self.train_op = self.opt.apply_gradients(
             list(zip(clip_gradients, trainable_params)), global_step=self.global_step)
 
-    def train(self, sess, uij, l):
+    def train(self, sess, train_set, l):
+        #uid 0
+        #play_list 1-5
+        #list_len  6
+        #node_id   7
+        #is_leaf   8
+        #label     9
         # (i, y, is_leaf, hist_i, sl)
+        # self.i = tf.placeholder(tf.int32, [None, ])  # [B]    #node_id
+        # self.y = tf.placeholder(tf.float32, [None, ])  # [B]  #label
+        # self.hist_i = tf.placeholder(tf.int32, [None, None])  # [B, T]
+        # self.sl = tf.placeholder(tf.int32, [None, ])  # [B] 播放历史个数
+        # self.lr = tf.placeholder(tf.float64, [])      #decay
+        # self.is_leaf = tf.placeholder(tf.int32, [None, ]) #node节点0 叶子节点1
+        # print('train')
+        features,label = sess.run(train_set)
+        features = np.array(features)
+        # print('features')
+        # exit(0)
         loss, _ = sess.run([self.loss, self.train_op], feed_dict={
-            self.i: uij[0],
-            self.y: uij[1],
-            self.is_leaf: uij[2],
-            self.hist_i: uij[3],
-            self.sl: uij[4],
-            self.lr: l,
+            self.i: features[:,7],
+            self.y: label,
+            self.is_leaf: features[:,8],
+            self.hist_i: features[:,1:6],
+            self.sl: features[:,6],
+            self.lr: l
         })
         return loss
 
-    def _eval(self,sess,model,test_set,test_batch_size):
+    def _eval(self,sess,model,test_set,validation_step):
         score_arr = []
         p_arr = []
-        for _, uij in DataInput(test_set, test_batch_size):
+        for i in range(validation_step):
+        # for _, uij in DataInput(test_set, test_batch_size):
+            features, label = sess.run(test_set)
+            features = np.array(features)
             score = sess.run(model.predictions, feed_dict={
-                self.i: uij[0],
-                self.y: uij[1],
-                self.is_leaf: uij[2],
-                self.hist_i: uij[3],
-                self.sl: uij[4],
+                self.i: features[:, 7],
+                self.is_leaf: features[:,8],
+                self.hist_i: features[:,1:6],
+                self.sl: features[:, 6],
             })
             score_arr.extend(score)
-            p_arr.extend(uij[1])
+            p_arr.extend(label)
         test_auc = metrics.roc_auc_score(p_arr, score_arr)
             # 保存pb
             # from tensorflow.python.framework import graph_util
@@ -116,19 +136,16 @@ class Model(object):
             #     f.write(constant_graph.SerializeToString())
         return test_auc
 
-
-    def test(self, sess, uij):
-        return sess.run(self.logits_sub, feed_dict={
-            self.u: uij[0],
-            self.i: uij[1],
-            self.j: uij[2],
-            self.hist_i: uij[3],
-            self.sl: uij[4],
+    def predict(self,data,sess):
+        val = sess.run(self.predictions, feed_dict={
+            self.i: data[:, 7],
+            self.is_leaf: data[:, 8],
+            self.hist_i: data[:, 1:6],
+            self.sl: data[:, 6],
         })
+        return val
 
     def get_embeddings(self,item_list,save_path):
-        """
-        """
         with tf.Session() as sess:
             saver = tf.train.Saver()
             saver.restore(sess, save_path)

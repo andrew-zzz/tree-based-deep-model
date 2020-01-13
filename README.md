@@ -1,30 +1,18 @@
 # 深度树模型实验
 ---
 
-## 目录
-- 实验环境
-- 代码结构
-- 算法模型
-- 进度
-- 参考文献
-
-
-### 实验环境
-    系统环境: ubuntu 18.04LTS
-    IDE：PyCharm 2018.3
-[实验数据集](https://tianchi.aliyun.com/dataset/dataDetail?dataId=649&userId=1)
-
 ### 代码结构
-![code-structure](./code_structure.jpg)  
 文件说明  
 tdm.py: 代码入口，负责完整深度树模型的训练和测试  
 sample_init.py: 数据处理及生成程序，负责数据预处理及树样本的生成  
 construct_tree.py: 样本二叉树生成程序，负责树模型的生成  
-deep_network.py: DNN的实现程序，负责网络的搭建  
-prediction.py: 树节点预测及模型评测程序，负责模型预测及性能验证  
+din_model.py: DIN网络搭建
+prediction.py: 遍历树预测部分
+dataset.py:数据生成迭代器 
+relative_album_caculate:专辑的相关专辑计算
+
 
 ### 算法模型
-![algorithm-structure](./algorithm_structure.png)  
 深度树算法流程(文献[1]):  
 1. 构造随机二叉树  
 2. 基于树模型生成样本  
@@ -33,8 +21,7 @@ prediction.py: 树节点预测及模型评测程序，负责模型预测及性�
 5. 循环上述2～4过程
 
 ### 进度
-完成功能测试，跑通模型  
-TODO: 改进性能，验证模型  
+100w用户,每个用户5个播放历史跑通
 
 ### 参考文献
     [1] Learning Tree-based Deep Model for Recommender Systems, Han Zhu, Xiang Li, Pengye Zhang, etc.

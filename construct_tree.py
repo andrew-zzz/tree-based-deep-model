@@ -106,6 +106,7 @@ class TreeLearning(TreeInitialize):
         self.root = None
         self.leaf_dict = {}
         self.node_size = 0
+        self.new_items_list = None
 
     def _balance_clutering(self, c1, c2, item1, item2):
         amount = item1.shape[0] - item2.shape[0]
@@ -161,3 +162,18 @@ class TreeLearning(TreeInitialize):
         _ = self._define_node_index(self.root)
         return self.root
 
+    def leaf(self,root,list):
+        if root == None:
+            return 0
+        elif root.left == None and root.right == None:
+            list.append(root.item_id)
+            return list
+        else:
+            self.leaf(root.left, list)
+            self.leaf(root.right, list)
+        return list
+
+    def _rebuild_item_list(self):
+        a = []
+        self.leaf(self.root,a)
+        self.items = a

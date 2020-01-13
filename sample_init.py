@@ -4,7 +4,7 @@ import random
 import multiprocessing as mp
 import pandas as pd
 import numpy as np
-from .construct_tree import TreeInitialize
+from ximalaya_brain_jobs.train.vip.tdm.construct_tree import TreeInitialize
 import pickle
 from ximalaya_brain_utils.hdfs_util import HdfsClient
 #载入csv处理写入pickle
@@ -31,8 +31,6 @@ def data_process(local):
                            names=['user_ID', 'item_ID', 'category_ID']))
     data_raw = pd.concat(dl).dropna().reset_index(drop=True)
     print(data_raw)
-    #去除一部分数据跑跑看
-    data_raw = data_raw.iloc[0:30000000,:]
     # print('finish load')
     # print(data_raw)
     user_list = data_raw.user_ID.drop_duplicates().to_list()
@@ -45,7 +43,6 @@ def data_process(local):
     category_dict = dict(zip(category_list, range(len(category_list))))
     data_raw['category_ID'] = data_raw.category_ID.apply(lambda x: category_dict[x])
 
-    print('start build tree')
     #建立二叉树
     random_tree = TreeInitialize(data_raw)
     _ = random_tree.random_binary_tree()
@@ -56,14 +53,16 @@ def data_process(local):
     data['behavior_num'] = data.item_ID.apply(lambda x: len(x))
     print('computer behavior_num')
     #过滤行为数据小于10次的user
-    # mask_length = data.behavior_num.max()
+    mask_length = data.behavior_num.max()
+    print('mask_length %d' % mask_length)
     # data = data[data.behavior_num >= 2]
     # data = data[data.behavior_num < 10]
     # print('finish filter num > 10')
     #加mask
-    # data['item_ID'] = _mask_padding(data['item_ID'], mask_length)
+    # data['item_ID'] = _mask_padding(data['item_ID'], 6)
     #data 'user_ID',timestamp 'item_list', 'behaviors_list'
-    data_train, data_validate = data[:-200000], data[-200000:]
+    # data_train, data_validate = data[:-100000], data[-100000:]
+    data_train, data_validate = data[:-50000], data[-50000:]
     cache = (user_dict, item_dict, random_tree)
     # return data_train, data_validate.reset_index(drop=True), cache
     with open('/home/dev/data/andrew.zhu/tdm/data_flow/sample.pkl', 'wb') as f:
@@ -86,6 +85,42 @@ def test_pickle():
         # print(user_dict)
         # print(item_dict)
         # print(random_tree)
+
+def df_split(df, num):
+    row = df.shape[0]
+    part_size = row // num
+    df_list = []
+    for i in range(num):
+        start, end = part_size * i, part_size * (i + 1)
+        df_tmp = df.iloc[start: end, :]
+        df_list.append(df_tmp)
+    if row % num != 0:
+        df_list.append(df.iloc[end:row, :])
+    return df_list
+
+def del_file(path_data):
+    for i in os.listdir(path_data) :
+        file_data = path_data + "/" + i
+        if os.path.isfile(file_data) == True:
+            os.remove(file_data)
+        else:
+            del_file(file_data)
+
+def sample_merge_multiprocess(data, tree_map,mode, split_num,dir):
+    del_file(dir)
+    df_list = df_split(data, split_num)
+    length = len(df_list)
+    print("total dataset length %d df_list_length is %d" % (len(data),length))
+    from multiprocessing import Pool, Process
+    # datas = Manager().list()
+    p_list = []
+    for i in range(length):
+        p = Process(target=merge_samples, args=(df_list[i], tree_map,mode, i))
+        p.start()
+        p_list.append(p)
+    for res in p_list:
+        res.join()
+
 
 def _single_node_sample(item_id, node, root):
     samples = []
@@ -135,7 +170,7 @@ def _single_node_sample(item_id, node, root):
     return samples
 
 def map_generate(df):
-    #生成map
+    #生成map 为了提高访问速度
     r_value = {}
     df = df.values
     for i in df:
@@ -144,7 +179,6 @@ def map_generate(df):
             r_value[i[0]] = [[i[1],i[2],i[3]]]
         else:
             r_value[i[0]].append([i[1], i[2], i[3]])
-            r_value[i[0]] = r_value[i[0]]
     return r_value
 
 def _single_node_sample_1(item_id, node, node_list):
@@ -162,18 +196,18 @@ def _single_node_sample_1(item_id, node, node_list):
         positive_info.append(id)
         node = node.parent
         i += 1
-    #j从root节点到叶子节点的index k代表当前level
-    j, k = i-2, 1
+    #j从root下面一层开始的层id k代表当前level
+    j = i-2
     #当前tree_list_map数据结构为[[(id,is_leaf)],[]]
     tree_depth = len(node_list)
     for i in range(1,tree_depth):
+        #i为数的当前层数从1开始
         tmp_map = node_list[i]
-        if len(tmp_map) <= 2*k:
-            index_list = range(len(tmp_map))
+        if(len(tmp_map) <= 5):
+            index_list = random.sample(range(len(tmp_map)), 2)
         else:
-            index_list = random.sample(range(len(tmp_map)), k)
+            index_list = random.sample(range(len(tmp_map)), 5)
         if j == 0:
-            index_list = random.sample(range(len(tmp_map)), k)
             remove_item = (positive_info[j], 1)
         else:
             remove_item = (positive_info[j], 0)
@@ -185,10 +219,8 @@ def _single_node_sample_1(item_id, node, node_list):
         if [item_id, remove_item[0], remove_item[1], 0] in sample_iter:
             sample_iter.remove([item_id, remove_item[0], remove_item[1], 0])
         samples.extend(sample_iter)
-        k += 1
         j -= 1
         if(j < 0):break
-    e = time.clock()
     return samples
 
 
@@ -196,9 +228,10 @@ def tree_generate_samples(items, leaf_dict, node_list):
     """Sample based on the constructed tree with multiprocess."""
     samples_total = []
     for item in items:
-        node = leaf_dict[item]
-        samples = _single_node_sample_1(item, node, node_list)
-        samples_total.extend(samples)
+        if item != -2:
+            node = leaf_dict[item]
+            samples = _single_node_sample_1(item, node, node_list)
+            samples_total.extend(samples)
         # total_samples = pd.concat(samples, ignore_index=True)
     samples = pd.DataFrame(samples_total, columns=['item_ID', 'node', 'is_leaf', 'label'])
     return samples
@@ -222,31 +255,53 @@ def _single_data_merge(data, tree_data):
             complete_data = pd.concat([complete_data, data_item], axis=0, ignore_index=True)
     return complete_data
 
-
-def merge_samples(data, tree_map,mode):
-    """combine the preprocessed samples and tree samples."""
+def merge_samples(data, tree_map,mode,process_id):
+    def list_tile(data, list_index):
+        # [1,[2,3,4],5] -> [1,2,3,4,5]
+        out = []
+        for j in range(len(data)):
+            if j != list_index:
+                out.append(data[j])
+            else:
+                out.extend(data[j])
+        return out
+    t_1 = time.clock()
+    print('-----------> 进程: %d - chunk: %s <------------' % (process_id, data.shape[0]))
     #生成样本数据 为了效率 树生成的物品index改成map结构
     train_size = data.shape[0]
-    print('train_size %f' % train_size)
     r_value = []
-    s = time.clock()
     #[user_ID,item_ID,behavior_num] ['node', 'is_leaf', 'label']
+    j = 0
+    s = time.clock()
     for i in range(train_size):
         data_row = data.iloc[i]
         data_row_values = data_row.values
         item_list = data_row.item_ID
+        data_row_values_tile = list_tile(data_row_values,1)
+        # data_row_values_tile = data_row_values
         for item in item_list:
+            # if(item == -2):
+            #     break
             l_len = len(tree_map[item])
-            tmp = np.append(l_len*[data_row_values],tree_map[item],axis=1)
+            tmp = np.append(l_len*[data_row_values_tile],tree_map[item],axis=1)
             r_value.extend(tmp)
-        if(i % 10000 == 0):
-            o = time.clock()
+        if(i % 10000 == 0 and i != 0):
+            # np.savetxt('/home/dev/data/andrew.zhu/tdm/data_flow/%s/%s_%s.csv' % (mode,process_id,j), r_value, delimiter=",",fmt='%d')
             pd.DataFrame(r_value)\
-                .to_csv('/home/dev/data/andrew.zhu/tdm/data_flow/%s.csv' % mode, mode='a',
-                                         header=True)
-            print('10000 time %f',(o-s))
+                .to_csv('/home/dev/data/andrew.zhu/tdm/data_flow/%s/%i_%s.csv' % (mode,process_id,j),
+                                         header=False,index=False)
+            print('mode:%s,process:%s,epoch:%d,time:%f,length:%d' % (mode,process_id,j, time.clock() - s,len(r_value)))
+            s = time.clock()
             r_value = []
-        # 18917
+            j = j + 1
+    if len(r_value)!= 0:
+        pd.DataFrame(r_value) \
+            .to_csv('/home/dev/data/andrew.zhu/tdm/data_flow/%s/%i_%s.csv' % (mode, process_id, j),
+                    header=False, index=False)
+    t_2 = time.clock()
+    print('进程 %d : time_use=%.2f s' % (process_id, t_2 - t_1))
+    """combine the preprocessed samples and tree samples."""
+
 
 class DataInput:
   def __init__(self, data, batch_size):
@@ -347,7 +402,7 @@ def download(hdfs,local):
 def main():
     hdfs_path = '/user/dev/andrew.zhu/tdm/PretrainData'
     local_path = '/home/dev/data/andrew.zhu/tdm/'
-    # download(hdfs_path,local_path)
+    download(hdfs_path,local_path)
     #数据过滤了 >300 要修正
     data_process(local_path+"PretrainData")
     test_pickle()
