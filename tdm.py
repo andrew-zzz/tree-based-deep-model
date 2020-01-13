@@ -1,6 +1,6 @@
-from ximalaya_brain_jobs.train.vip.tdm.sample_init import data_process, tree_generate_samples, sample_merge_multiprocess, DataInput , map_generate
-from ximalaya_brain_jobs.train.vip.tdm.construct_tree import TreeLearning
-from ximalaya_brain_jobs.train.vip.tdm.din_model import Model
+from .sample_init import data_process, tree_generate_samples, sample_merge_multiprocess, DataInput , map_generate
+from .construct_tree import TreeLearning
+from .din_model import Model
 import tensorflow as tf
 import pickle
 import os
@@ -9,7 +9,7 @@ import time
 import random
 from ximalaya_brain_jobs.train.vip.tdm.dataset import DataGenerator
 import pandas as pd
-from ximalaya_brain_jobs.model.util import get_train_test_steps_dir
+from .dataset import get_train_test_steps_dir
 
 
 def get_data():

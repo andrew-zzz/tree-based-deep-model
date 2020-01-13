@@ -4,7 +4,7 @@ import random
 import multiprocessing as mp
 import pandas as pd
 import numpy as np
-from ximalaya_brain_jobs.train.vip.tdm.construct_tree import TreeInitialize
+from .construct_tree import TreeInitialize
 import pickle
 from ximalaya_brain_utils.hdfs_util import HdfsClient
 #载入csv处理写入pickle
