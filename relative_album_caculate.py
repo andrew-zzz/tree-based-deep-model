@@ -39,7 +39,7 @@ def get_embedding():
     item_ids, item_size ,node_size = tree.items, len(tree.items),tree.node_size
     print('item_size %d' % item_size)
     print('node_size %d' % node_size)
-    model = Model(item_size, node_size)
+    model = Model(item_size, node_size,10)
     with tf.Session() as sess:
         saver = tf.train.Saver()
         saver.restore(sess, "/home/dev/data/andrew.zhu/tdm/model/tdm.ckpt")
@@ -118,4 +118,4 @@ def main():
     item_sim_item_save_path='/home/dev/data/andrew.zhu/tdm/data_flow/'
     file_name='album_sim'
     item_dict = dict(zip(item_dict.values(), item_dict.keys()))
-    get_item_similar_item(item_dict, item_embedding_index, item_embedding, item_sim_item_save_path, file_name, 3)
+    get_item_similar_item(item_dict, item_embedding_index, item_embedding, item_sim_item_save_path, file_name, 4)

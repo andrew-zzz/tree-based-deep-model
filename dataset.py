@@ -1,39 +1,6 @@
 import tensorflow as tf
 import os
 import numpy as np
-import linecache
-import math
-
-def get_train_test_steps_dir(deep_train_dirs, deep_test_dirs, batch_size):
-    '''
-    打印训练和测试数据的基本信息，获取训练和测试的步数
-    :param deep_train_dirs:
-    :param deep_test_dirs:
-    :param batch_size
-    :return:
-    '''
-    train_data_num = 0
-    if os.path.exists(deep_train_dirs):
-        for filename in os.listdir(deep_train_dirs):
-            if filename=="_SUCCESS":
-                continue
-            full_filepath = os.path.join(deep_train_dirs, filename)
-            file_lines = len(linecache.getlines(full_filepath)) - 1
-            train_data_num = train_data_num + file_lines
-    print("train_data_num")
-    print(train_data_num)
-    test_data_num = 0
-    if os.path.exists(deep_test_dirs):
-        for filename in os.listdir(deep_test_dirs):
-            if filename=="_SUCCESS":
-                continue
-            full_filepath = os.path.join(deep_test_dirs, filename)
-            file_lines = len(linecache.getlines(full_filepath)) - 1
-            test_data_num = test_data_num + file_lines
-    train_steps = math.ceil(train_data_num / batch_size)
-    validation_steps = math.ceil(test_data_num / batch_size)
-    linecache.clearcache()
-    return train_steps, validation_steps
 
 class DataGenerator(object):
     def __init__(self, train_dir, test_dir, feature_dim, batch_size=20000):

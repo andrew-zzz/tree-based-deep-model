@@ -4,7 +4,7 @@ import random
 import multiprocessing as mp
 import pandas as pd
 import numpy as np
-from .construct_tree import TreeInitialize
+from ximalaya_brain_jobs.train.vip.tdm.construct_tree import TreeInitialize
 import pickle
 from ximalaya_brain_utils.hdfs_util import HdfsClient
 #载入csv处理写入pickle
@@ -30,6 +30,7 @@ def data_process(local):
         dl.append(pd.read_csv(f, header=None,
                            names=['user_ID', 'item_ID', 'category_ID']))
     data_raw = pd.concat(dl).dropna().reset_index(drop=True)
+    print('data_raw')
     print(data_raw)
     # print('finish load')
     # print(data_raw)
@@ -55,14 +56,17 @@ def data_process(local):
     #过滤行为数据小于10次的user
     mask_length = data.behavior_num.max()
     print('mask_length %d' % mask_length)
-    # data = data[data.behavior_num >= 2]
+    data = data.sample(frac=1).reset_index(drop=True)
+    data = data[data.behavior_num == 5]
+    print('5 hist len')
+    print(data.shape)
     # data = data[data.behavior_num < 10]
     # print('finish filter num > 10')
     #加mask
     # data['item_ID'] = _mask_padding(data['item_ID'], 6)
-    #data 'user_ID',timestamp 'item_list', 'behaviors_list'
+    #data 'user_ID', 'item_list', 'behaviors_num'
     # data_train, data_validate = data[:-100000], data[-100000:]
-    data_train, data_validate = data[:-50000], data[-50000:]
+    data_train, data_validate = data[:-20000], data[-20000:]
     cache = (user_dict, item_dict, random_tree)
     # return data_train, data_validate.reset_index(drop=True), cache
     with open('/home/dev/data/andrew.zhu/tdm/data_flow/sample.pkl', 'wb') as f:
@@ -106,7 +110,7 @@ def del_file(path_data):
         else:
             del_file(file_data)
 
-def sample_merge_multiprocess(data, tree_map,mode, split_num,dir):
+def sample_merge_multiprocess(data, tree_map,mode, split_num ,dir):
     del_file(dir)
     df_list = df_split(data, split_num)
     length = len(df_list)
@@ -115,7 +119,7 @@ def sample_merge_multiprocess(data, tree_map,mode, split_num,dir):
     # datas = Manager().list()
     p_list = []
     for i in range(length):
-        p = Process(target=merge_samples, args=(df_list[i], tree_map,mode, i))
+        p = Process(target=merge_samples, args=(df_list[i], tree_map, mode, i))
         p.start()
         p_list.append(p)
     for res in p_list:
@@ -196,17 +200,17 @@ def _single_node_sample_1(item_id, node, node_list):
         positive_info.append(id)
         node = node.parent
         i += 1
-    #j从root下面一层开始的层id k代表当前level
+    #j从root下面一层开始的层id
     j = i-2
     #当前tree_list_map数据结构为[[(id,is_leaf)],[]]
     tree_depth = len(node_list)
     for i in range(1,tree_depth):
         #i为数的当前层数从1开始
         tmp_map = node_list[i]
-        if(len(tmp_map) <= 5):
-            index_list = random.sample(range(len(tmp_map)), 2)
-        else:
-            index_list = random.sample(range(len(tmp_map)), 5)
+        # if(i <= 2):
+        #     index_list = random.sample(range(len(tmp_map)), 2)
+        # else:
+        index_list = random.sample(range(len(tmp_map)), 2*i)
         if j == 0:
             remove_item = (positive_info[j], 1)
         else:
@@ -220,7 +224,8 @@ def _single_node_sample_1(item_id, node, node_list):
             sample_iter.remove([item_id, remove_item[0], remove_item[1], 0])
         samples.extend(sample_iter)
         j -= 1
-        if(j < 0):break
+        if(j < 0):
+            break
     return samples
 
 
@@ -400,9 +405,9 @@ def download(hdfs,local):
     print('----------------> get data finished  <-------------------' + str(local_train_path))
 
 def main():
-    hdfs_path = '/user/dev/andrew.zhu/tdm/PretrainData'
+    hdfs_path = '/user/dev/andrew.zhu/tdm/data'
     local_path = '/home/dev/data/andrew.zhu/tdm/'
     download(hdfs_path,local_path)
     #数据过滤了 >300 要修正
-    data_process(local_path+"PretrainData")
+    data_process(local_path+"data")
     test_pickle()

@@ -19,42 +19,50 @@ def make_data(state,node):
         r_val.append(0)
     return np.array([r_val])
 
+
 def candidates_generator(state, root, k, model,sess):
     """layer-wise retrieval algorithm in prediction."""
     Q, A = [root], []
+    time = 0
     while Q:
+        Q_tmp = []
         for node in Q:
             if node.item_id is not None:
                 A.append(node)
-                Q.remove(node)
+            else:
+                Q_tmp.append(node)
+        Q = Q_tmp
         probs = []
         for node in Q:
             data = make_data(state,node)
             prob = model.predict(data,sess)
-            print(prob)
-            probs.append(prob[0])
+            probs.append(prob[0][0])
         prob_list = list(zip(Q, probs))
         prob_list = sorted(prob_list, key=lambda x: x[1], reverse=True)
+        print('prob_list %d' % time)
+        for i in prob_list:
+            print('time:%d,id %d:score %f' %(time,i[0].val,i[1]))
+        time = time + 1
         I = []
-        if len(prob_list) > k:
-            for i in range(k):
-                I.append(prob_list[i][0])
-        else:
-            for p in prob_list:
-                I.append(p[0])
+        for i in prob_list[0:k]:
+            I.append(i[0])
+        # print(I)
         Q = []
-        while I:
-            node = I.pop()
+        for j in I:
             if node.left:
-                Q.append(node.left)
+                Q.append(j.left)
             if node.right:
-                Q.append(node.right)
+                Q.append(j.right)
+        t = []
+        for i in range(len(Q)):
+            if Q[i].item_id == None:
+                t.append(Q[i].val)
+            else:
+                t.append(Q[i].item_id)
     probs = []
-
     for leaf in A:
         data = make_data(state,leaf)
         prob = model.predict(data,sess)
-        print(prob)
         probs.append(prob[0])
     prob_list = list(zip(A, probs))
     prob_list = sorted(prob_list, key=lambda x: x[1], reverse=True)
@@ -62,7 +70,6 @@ def candidates_generator(state, root, k, model,sess):
     for i in range(k):
         A.append(prob_list[i][0].item_id)
     return A
-
 
 def metrics_count(data, root, k, model):
     """Recall/Precision/F-measure statistic."""
@@ -95,24 +102,39 @@ def metrics_count(data, root, k, model):
 
 def main():
     data_train, data_validate, cache = get_data()
-    user_dict, item_index, tree = cache
+    with open('/home/dev/data/andrew.zhu/tdm/data_flow/final_tree.pkl', 'rb') as f:
+        tree = pickle.load(f)
     item_ids, item_size, node_size = tree.items, len(tree.items), tree.node_size
-    index_item = dict(zip(item_index.values(), item_index.keys()))
+    print(item_size)
+    print(node_size)
+    model = Model(item_size, node_size,9)
+    # play_hist = [29309729,23571206,28580191,321787,26565248]
+    # play_hist_index = []
+    # for i in play_hist:
+    #     play_hist_index.append(item_index[i])
+    play_hist_index = [100.0, 77.0, 800.0, 999.0,1200.0]
 
-    model = Model(item_size, node_size)
-    play_hist = [29309729,23571206,28580191,321787,26565248]
-    play_hist_index = []
-    for i in play_hist:
-        play_hist_index.append(item_index[i])
-
-    print(play_hist_index)
+    # print(play_hist_index)
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'  # 使用 GPU
     with tf.Session() as sess:
         saver = tf.train.Saver()
         saver.restore(sess, "/home/dev/data/andrew.zhu/tdm/model/tdm.ckpt")
-        result = candidates_generator(play_hist_index, tree.root, 20, model,sess)
-        result_albumId = []
-        for i in result:
-            result_albumId.append(index_item[i])
-        print(result_albumId)
-        # print(item_embeddings.tolist())
-        # return np.array(item_embeddings)
+        # data = np.array([[12.0, 552.0, 853.0, 12.0, 283.0, 210.0, 5.0, 0.0, 0.0]])
+        # import time
+        # t1 = time.clock()
+        # rval = model.predict(data, sess)
+        # t2 = time.clock()
+        # print(t2 - t1)
+        # print('rval')
+        # print(rval)
+        import time
+        ts = time.clock()
+        result = candidates_generator(play_hist_index, tree.root, 50, model,sess)
+        ts1 = time.clock()
+        print(ts1 - ts)
+        print(result)
+        # result_albumId = []
+        # for i in result:
+        #     result_albumId.append(index_item[i])
+        # print(result_albumId)

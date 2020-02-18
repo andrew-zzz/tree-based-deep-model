@@ -101,7 +101,7 @@ class TreeInitialize(object):
 class TreeLearning(TreeInitialize):
     """Build the k-means clustering binary tree"""
     def __init__(self, items, index_dict):
-        self.items = items #embedding
+        self.items = items #embedding according to item_list
         self.mapper = index_dict #item_list
         self.root = None
         self.leaf_dict = {}

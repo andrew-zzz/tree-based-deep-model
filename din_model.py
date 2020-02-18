@@ -6,14 +6,15 @@ import sklearn.metrics as metrics
 
 class Model(object):
 
-    def __init__(self, album_count, node_count):
-        self.album_count = album_count
-        self.i = tf.placeholder(tf.int32, [None, ])  # [B]    #node_id
-        self.y = tf.placeholder(tf.float32, [None, ])  # [B]  #label
-        self.hist_i = tf.placeholder(tf.int32, [None, None])  # [B, T]
-        self.sl = tf.placeholder(tf.int32, [None, ])  # [B] 播放历史个数
+    def __init__(self, album_count, node_count,feature_size):
+        self.input = tf.cast(tf.placeholder(tf.double, [None, feature_size], name='input'), tf.int32)  # [B,B]
+        # self.y = tf.cast(tf.placeholder(tf.int32, [None, 1], name='label'), tf.float32)
+        self.y = tf.placeholder(tf.float32, [None, ])
+        self.i = self.input[:,7]  # [B]    #node_id
+        self.hist_i = self.input[:,1:6]  # [B, T]
+        self.sl = self.input[:,6]   # [B] 播放历史个数
         self.lr = tf.placeholder(tf.float64, [])      #decay
-        self.is_leaf = tf.placeholder(tf.int32, [None, ]) #node节点0 叶子节点1
+        self.is_leaf = self.input[:,8] #node节点0 叶子节点1
         hidden_units = 32
         self.saver = None
 
@@ -59,9 +60,7 @@ class Model(object):
         d_layer_3_i = tf.layers.dense(d_layer_2_i, 1, activation=None, name='f3')
         d_layer_3_i = tf.reshape(d_layer_3_i, [-1])
         self.logits = i_b + d_layer_3_i
-        self.predictions = tf.sigmoid(self.logits)
-        self.score_i = tf.sigmoid(i_b + d_layer_3_i)
-        self.score_i = tf.reshape(self.score_i, [-1, 1])
+        self.prediction = tf.cast(tf.reshape(tf.sigmoid(self.logits), [-1, 1]), tf.double, name='prediction')
 
         # Step variable
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -83,33 +82,20 @@ class Model(object):
             list(zip(clip_gradients, trainable_params)), global_step=self.global_step)
 
     def train(self, sess, train_set, l):
-        #uid 0
-        #play_list 1-5
-        #list_len  6
-        #node_id   7
-        #is_leaf   8
-        #label     9
-        # (i, y, is_leaf, hist_i, sl)
-        # self.i = tf.placeholder(tf.int32, [None, ])  # [B]    #node_id
-        # self.y = tf.placeholder(tf.float32, [None, ])  # [B]  #label
-        # self.hist_i = tf.placeholder(tf.int32, [None, None])  # [B, T]
-        # self.sl = tf.placeholder(tf.int32, [None, ])  # [B] 播放历史个数
-        # self.lr = tf.placeholder(tf.float64, [])      #decay
-        # self.is_leaf = tf.placeholder(tf.int32, [None, ]) #node节点0 叶子节点1
-        # print('train')
         features,label = sess.run(train_set)
         features = np.array(features)
-        # print('features')
-        # exit(0)
         loss, _ = sess.run([self.loss, self.train_op], feed_dict={
-            self.i: features[:,7],
-            self.y: label,
-            self.is_leaf: features[:,8],
-            self.hist_i: features[:,1:6],
-            self.sl: features[:,6],
-            self.lr: l
+            self.input:features,
+            self.y:label,
+            self.lr:l
         })
         return loss
+
+    def predict(self,data,sess):
+        val = sess.run(self.prediction, feed_dict={
+            self.input: data,
+        })
+        return val
 
     def _eval(self,sess,model,test_set,validation_step):
         score_arr = []
@@ -118,11 +104,8 @@ class Model(object):
         # for _, uij in DataInput(test_set, test_batch_size):
             features, label = sess.run(test_set)
             features = np.array(features)
-            score = sess.run(model.predictions, feed_dict={
-                self.i: features[:, 7],
-                self.is_leaf: features[:,8],
-                self.hist_i: features[:,1:6],
-                self.sl: features[:, 6],
+            score = sess.run(model.prediction, feed_dict={
+                self.input: features
             })
             score_arr.extend(score)
             p_arr.extend(label)
@@ -135,15 +118,6 @@ class Model(object):
             #                         mode='wb') as f:  # 模型的名字是model.pb
             #     f.write(constant_graph.SerializeToString())
         return test_auc
-
-    def predict(self,data,sess):
-        val = sess.run(self.predictions, feed_dict={
-            self.i: data[:, 7],
-            self.is_leaf: data[:, 8],
-            self.hist_i: data[:, 1:6],
-            self.sl: data[:, 6],
-        })
-        return val
 
     def get_embeddings(self,item_list,save_path):
         with tf.Session() as sess:
