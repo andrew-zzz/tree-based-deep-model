@@ -20,7 +20,10 @@ relative_album_caculate:专辑的相关专辑计算
 3. 训练DNN模型直到收敛  
 4. 基于DNN模型得到样本的Embedding，重新构造聚类二叉树  
 5. 循环上述2～4过程
+该过程全部在tdm.py中
 
+首先运行sample_init.py
+然后运行tdm.py
 ### 进度
 100w用户,每个用户5个播放历史跑通
 
